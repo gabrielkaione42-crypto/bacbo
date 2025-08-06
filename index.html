@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login - Bac Bo Admin</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="login-body">
+  <div class="login-container">
+    <div class="login-box">
+      <h2>?? Login Admin</h2>
+      <form id="loginForm">
+        <div class="input-group">
+          <label>Usuario</label>
+          <input type="text" id="username" required />
+        </div>
+        <div class="input-group">
+          <label>Senha</label>
+          <input type="password" id="password" required />
+        </div>
+        <button type="submit">Entrar</button>
+        <p id="loginError" class="error" style="display:none;">
+          Usuario ou senha incorretos!
+        </p>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Login simples (pode ser substituido por backend real)
+    document.getElementById('loginForm').onsubmit = function(e) {
+      e.preventDefault();
+      const user = document.getElementById('username').value;
+      const pass = document.getElementById('password').value;
+
+      // Credenciais fixas (admin / admin123)
+      if (user === 'admin' && pass === 'admin123') {
+        localStorage.setItem('isLoggedIn', 'true');
+        window.location.href = 'admin.html';
+      } else {
+        document.getElementById('loginError').style.display = 'block';
+      }
+    };
+  </script>
+</body>
+</html>
