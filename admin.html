@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Painel Admin - Bac Bo</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+</head>
+<body class="admin-body">
+  <div class="admin-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <h3>?? Bac Bo Admin</h3>
+      <ul>
+        <li onclick="showTab('dashboard')">Dashboard</li>
+        <li onclick="showTab('history')">Historico</li>
+        <li onclick="logout()">Sair</li>
+      </ul>
+    </aside>
+
+    <!-- Conteudo Principal -->
+    <main class="main-content">
+      <header>
+        <h1 id="pageTitle">Dashboard</h1>
+        <span class="user-info">Ola, <span id="username">Usuario</span></span>
+      </header>
+
+      <!-- Dashboard -->
+      <div id="dashboard" class="tab-content">
+        <div class="controls">
+          <button class="btn blue" onclick="addRound('blue')">?? Azul</button>
+          <button class="btn red" onclick="addRound('red')">?? Vermelho</button>
+          <button class="btn yellow" onclick="addRound('yellow')">?? Tie</button>
+        </div>
+
+        <div class="rounds" id="rounds"></div>
+
+        <div class="results">
+          <h3>?? Analise da IA</h3>
+          <div class="prediction" id="prediction">
+            Registre algumas rodadas para ver a analise.
+          </div>
+        </div>
+      </div>
+
+      <!-- Historico -->
+      <div id="history" class="tab-content" style="display: none;">
+        <h3>?? Historico de Rodadas</h3>
+        <ul id="historyList"></ul>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // ?? Configuracao do Firebas
+	const firebaseConfig = {
+  apiKey: "AIzaSyDFud8lqMVt1gBWwuu34tiIjZN9coFCWy8",
+  authDomain: "bac-bo-kn.firebaseapp.com",
+  projectId: "bac-bo-kn",
+  storageBucket: "bac-bo-kn.firebasestorage.app",
+  messagingSenderId: "593783734229",
+  appId: "1:593783734229:web:a30bb4c1ecc0597493875c",
+  measurementId: "G-B66N21FQ03"
+};
+
+    // Inicializa Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const database = firebase.database();
+
+    // Verifica login
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        document.getElementById('username').textContent = user.email;
+        loadRounds(); // Carrega dados do Firebase
+      } else {
+        window.location.href = 'login.html'; // Redireciona para pagina de login
+      }
+    });
+
+    // Carrega rodadas do Firebase
+    function loadRounds() {
+      database.ref('bacbo/rounds').on('value', snapshot => {
+        const rounds = snapshot.val() || [];
+        displayRounds(rounds);
+        analyze(rounds);
+      });
+
+      database.ref('bacbo/history').on('value', snapshot => {
+        const history = snapshot.val() || [];
+        updateHistory(history);
+      });
+    }
+
+    // Exibe as rodadas
+    function displayRounds(rounds) {
+      const container = document.getElementById('rounds');
+      container.innerHTML = '<h4>Ultimas 10 Rodadas</h4>';
+      
+      const grid = document.createElement('div');
+      grid.className = 'rounds-grid';
+      
+      const recent = rounds.slice(-10);
+      for (let i = 0; i < 10; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'round empty';
+        if (i < recent.length) {
+          const color = recent[i];
+          cell.className = `round ${color}`;
+          cell.textContent = color === 'blue' ? 'P' : color === 'red' ? 'B' : 'T';
+        }
+        grid.appendChild(cell);
+      }
+      container.appendChild(grid);
+    }
+
+    // Adiciona rodada
+    function addRound(color) {
+      const timestamp = new Date().toLocaleString();
+      const roundRef = database.ref('bacbo/rounds').push();
+      roundRef.set({
+        color: color,
+        timestamp: timestamp
+      });
+
+      database.ref('bacbo/history').push({
+        action: `${color === 'blue' ? 'Azul' : color === 'red' ? 'Vermelho' : 'Tie'} - ${timestamp}`
+      });
+    }
+
+    // Analisa os dados
+    function analyze(rounds) {
+      if (!rounds || rounds.length === 0) {
+        document.getElementById('prediction').innerHTML = "?? Registre rodadas para analise.";
+        return;
+      }
+
+      const total = rounds.length;
+      const recent = rounds.slice(-10); // ultimas 10
+
+      // Contagem
+      const counts = { blue: 0, red: 0, yellow: 0 };
+      recent.forEach(r => counts[r]++);
+
+      let suggestion = "";
+      let confidence = "low";
+
+      // ?? Streak de 4+ (so conta como forte se for 4 ou mais)
+      if (recent.length >= 4) {
+        const last4 = recent.slice(-4);
+        if (last4[0] === last4[1] && last4[1] === last4[2] && last4[2] === last4[3]) {
+          const last = last4[3];
+          if (last !== 'yellow') {
+            suggestion = `?? Streak de 4x ${last === 'blue' ? '?? Azul' : '?? Vermelho'}!<br>`;
+            suggestion += `?? Alta chance de <strong>reversao</strong>.<br>`;
+            suggestion += `? <strong>Entrada sugerida:</strong> Aposte no oposto.`;
+            confidence = "high";
+          }
+        }
+      }
+
+      // ?? Tie atrasado (sem Tie ha 10+ rodadas)
+      else if (total >= 10 && recent.every(r => r !== 'yellow')) {
+        suggestion = `?? <strong>Tie ausente ha ${total} rodadas!</strong><br>`;
+        suggestion += `?? Alta chance de sair agora (8x).<br>`;
+        suggestion += `? <strong>Entrada sugerida:</strong> Considere cobrir o Tie.`;
+        confidence = "high";
+      }
+
+      // ?? Padrao verdadeiro de zigzag (minimo de 6 rodadas alternadas)
+      else if (total >= 6) {
+        let isZigzag = true;
+        for (let i = 0; i < recent.length - 1; i++) {
+          if (recent[i] === recent[i + 1]) {
+            isZigzag = false;
+            break;
+          }
+        }
+        if (isZigzag && recent.length >= 6) {
+          const next = recent[recent.length - 1] === 'blue' ? '?? Vermelho' : '?? Azul';
+          suggestion = `?? <strong>Padrao zigzag estavel detectado!</strong><br>`;
+          suggestion += `?? Proxima provavel: <strong>${next}</strong><br>`;
+          suggestion += `? Siga a sequencia por 1-2 rodadas.`;
+          confidence = "medium";
+        }
+      }
+
+      // ???? Cor dominante (60%+ nas ultimas 10)
+      else if (counts.blue > 0 && (counts.blue / recent.length) >= 0.6) {
+        suggestion = `?? <strong>Azul esta em onda</strong> (${counts.blue}/${recent.length}).<br>`;
+        suggestion += `?? Pode continuar.<br>`;
+        suggestion += `? Siga a tendencia com gestao.`;
+        confidence = "medium";
+      }
+      else if (counts.red > 0 && (counts.red / recent.length) >= 0.6) {
+        suggestion = `?? <strong>Vermelho dominante</strong> (${counts.red}/${recent.length}).<br>`;
+        suggestion += `?? Tendencia forte.<br>`;
+        suggestion += `? Continue com atencao.`;
+        confidence = "medium";
+      }
+
+      // ?? Sem padrao claro
+      else {
+        suggestion = `?? <strong>Sem padrao claro</strong><br>`;
+        suggestion += `?? Nenhuma entrada recomendada.<br>`;
+        suggestion += `? Evite apostar no escuro.`;
+        confidence = "low";
+      }
+
+      // Exibir no site
+      const predEl = document.getElementById('prediction');
+      predEl.innerHTML = `
+        <strong>?? Nivel de Confianca: ${confidence.toUpperCase()}</strong><br><br>
+        ${suggestion}
+      `;
+      predEl.className = `prediction ${confidence}`;
+    }
+
+    // Logout
+    function logout() {
+      auth.signOut().then(() => {
+        window.location.href = 'login.html';
+      }).catch(error => {
+        console.error("Erro ao sair:", error);
+      });
+    }
+
+    // Iniciar
+    loadRounds();
+  </script>
+</body>
+</html>
